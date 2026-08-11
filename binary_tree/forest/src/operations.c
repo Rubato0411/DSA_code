@@ -38,3 +38,5 @@ CSTree BiTreeToTree(BiTree t){
 CSTree BiTreeToForest(BiTree t){
     return BiTreeToTree(t);
 }
+ 
+//by hzx:test the authority as a member of organization
