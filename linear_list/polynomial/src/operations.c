@@ -18,7 +18,7 @@ void CreatPolyn(polynomial *p,int m){
         }
         PolyNode *pre=*p;
         PolyNode *cur=(*p)->next;
-        while(cur!=NULL&&cur->data.expn<t.expn){
+        while(cur!=NULL&&cur->data.expn>t.expn){
             pre=cur;
             cur=cur->next;
         }
@@ -54,9 +54,11 @@ void PrintPolyn(polynomial p){
         printf("0 0\n");
         return;
     }
+    int n=PolynLength(p);
+    printf("%d\n",n);
     PolyNode *cur=p->next;
     while(cur!=NULL){
-        printf("%.1f %d\n",cur->data.coef,cur->data.expn);
+        printf(",%.1f,%d\n",cur->data.coef,cur->data.expn);
         cur=cur->next;
     }
 }
@@ -80,6 +82,7 @@ void AddPolyn(polynomial *p1,polynomial *p2){
             if(pa->data.coef==0){
                 pc->next=pa->next;
                 free(pa);
+                pa=pc->next;
             }else{
                 pc=pa;
                 pa=pa->next;
@@ -87,7 +90,7 @@ void AddPolyn(polynomial *p1,polynomial *p2){
             PolyNode *temp=pb;
             pb=pb->next;
             free(temp);
-        }else if(flag<0){
+        }else if(flag>0){
             pc=pa;
             pa=pa->next;
         }else{
@@ -122,7 +125,7 @@ void InsertTerm(polynomial head, float coef, int expn) {
     }
     PolyNode *pre=head;
     PolyNode *cur=head->next;
-    while(cur&&cur->data.expn<expn){
+    while(cur&&cur->data.expn>expn){
         pre=cur;
         cur=cur->next;
     }
@@ -159,17 +162,73 @@ void MultiplyPolyn(polynomial *p1, polynomial *p2) {
         while (pb) {
             float newCoef=pa->data.coef*pb->data.coef;
             int newExpn=pa->data.expn+pb->data.expn;
-            InsertTerm(result, newCoef, newExpn);
+            InsertTerm(result,newCoef,newExpn);
             pb=pb->next;
         }
         pa=pa->next;
     }
     DestroyPolyn(p1);
-    *p1 = result;
+    *p1=result;
 }
 int cmp(term a,term b){
     if(a.expn==b.expn){
         return 0;
     }
     return a.expn>b.expn?1:-1;
+}
+
+void SortPolynomial(polynomial *p){
+    if(*p==NULL||(*p)->next==NULL){
+        return;
+    }
+    PolyNode*sorted=NULL;
+    PolyNode* cur=(*p)->next;
+    PolyNode*pre=*p;
+    while(cur!=NULL){
+        PolyNode* next=cur->next;
+        if(sorted==NULL||cur->data.expn>sorted->data.expn){
+            cur->next=sorted;
+            sorted=cur;
+        }else{
+            PolyNode* temp=sorted;
+            while(temp->next!=NULL&&temp->next->data.expn>cur->data.expn){
+                temp=temp->next;
+            }
+            cur->next=temp->next;
+            temp->next=cur;
+        }
+        cur=next;
+    }
+    (*p)->next=sorted;
+}
+
+float calculate(polynomial p,float x) {
+    float result=0.0;
+    PolyNode *cur=p->next;
+    while(cur!=NULL) {
+        result+=cur->data.coef*pow(x, cur->data.expn);
+        cur=cur->next;
+    }
+    return result;
+}
+
+void Derivative(polynomial *p){
+    if(*p==NULL||(*p)->next==NULL){
+        return;
+    }
+    PolyNode* cur=(*p)->next;
+    PolyNode* pre=*p;
+    while(cur!=NULL){
+        if(cur->data.expn!=0){
+            cur->data.coef*=cur->data.expn;
+            cur->data.expn--;
+            pre=cur;
+            cur=cur->next;
+        }else{
+            PolyNode*temp=cur;
+            pre->next=cur->next;
+            free(temp);
+            cur=pre->next;
+        }
+    }
 }
