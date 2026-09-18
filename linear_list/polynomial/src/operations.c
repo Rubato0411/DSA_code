@@ -74,7 +74,7 @@ int PolynLength(polynomial p){
 void AddPolyn(polynomial *p1,polynomial *p2){
     PolyNode *pa=(*p1)->next;
     PolyNode *pb=(*p2)->next;
-    PolyNode *pc=*p1;//记录结果链表的尾节点，维护删除情况
+    PolyNode *pc=*p1;
     while(pa&&pb){
         int flag=cmp(pa->data,pb->data);
         if(flag==0){
