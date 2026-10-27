@@ -1,0 +1,400 @@
+\documentclass[UTF8,a4paper,12pt]{ctexart}
+
+\usepackage[left=2.6cm,right=2.6cm,top=2.5cm,bottom=2.5cm]{geometry}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+
+\hypersetup{colorlinks=true,linkcolor=black,urlcolor=blue}
+\setlength{\parindent}{2em}
+\setlength{\parskip}{0.25em}
+\setlength{\headheight}{15pt}
+\setlength{\emergencystretch}{3em}
+\renewcommand{\arraystretch}{1.25}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{数据结构实习报告}
+\fancyhead[R]{电梯离散事件模拟}
+\fancyfoot[C]{\thepage}
+
+\definecolor{codegreen}{RGB}{0,110,50}
+\definecolor{codegray}{RGB}{90,90,90}
+\definecolor{codeblue}{RGB}{20,70,160}
+\definecolor{backcolor}{RGB}{247,247,247}
+
+\lstdefinestyle{cstyle}{
+    language=C,
+    backgroundcolor=\color{backcolor},
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{codeblue}\bfseries,
+    commentstyle=\color{codegreen},
+    stringstyle=\color{red!60!black},
+    numbers=left,
+    numberstyle=\tiny\color{codegray},
+    numbersep=8pt,
+    breaklines=true,
+    breakatwhitespace=false,
+    showstringspaces=false,
+    tabsize=4,
+    frame=single,
+    columns=fullflexible,
+    keepspaces=true
+}
+\lstset{style=cstyle}
+
+\title{\heiti 电梯离散事件模拟系统\\[0.5em]\Large 实习报告}
+\author{[REDACTED]\\学号：[REDACTED]}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+\vfill
+\begin{center}
+\begin{tabular}{rl}
+实验内容：& 单电梯及双电梯离散事件模拟\\
+语言：& C\\
+数据结构：& 有序事件链表、链队列\\
+时间单位：& $t=0.1\,\mathrm{s}$
+\end{tabular}
+\end{center}
+\vfill
+\clearpage
+
+\tableofcontents
+\clearpage
+
+\section{需求分析}
+
+\subsection{问题描述}
+
+本项目模拟一栋五层教学楼中的电梯运行。楼层编号为0至4，其中1层是电梯空闲时的本垒层。乘客在给定时刻到达某层，选择目标楼层并按下上行或下行按钮；若等待超过个人可容忍时间，则放弃乘梯。电梯根据楼层请求和轿厢请求完成开门、人员进出、关门、加速、逐层运行、减速和方向切换等动作。
+
+系统采用离散事件模拟方法。模拟时钟不按固定步长循环，而是每次从事件表中取出发生时间最早的事件，将系统时间直接推进到该时刻，再执行该事件并插入由它产生的后继事件。这样既能够保持动作的时序关系，也避免在两个事件之间进行无意义的空循环。
+
+在完成单电梯模拟后，项目进一步实现两部电梯协同运行。双电梯共享楼层等待队列与厅外按钮，但各自维护所在楼层、运行方向、轿厢按钮和轿厢乘客。系统需要把每个厅外请求唯一分配给一部电梯，避免两部电梯重复响应同一请求。
+
+\subsection{功能需求}
+
+\begin{enumerate}[label=\arabic*.]
+    \item 模拟0至4层的楼层环境，初始时电梯位于1层并处于空闲状态。
+    \item 按发生时间处理乘客事件M1至M6及电梯事件E1至E9。
+    \item 支持乘客到达、排队、等待超时、进入电梯和到达目标层离开等行为。
+    \item 支持厅外上行、下行按钮及轿厢内部目标楼层按钮。
+    \item 开门和关门各耗时20t，人员每次进出耗时25t；电梯每40t检查一次是否可以关门。
+    \item 电梯上行一层耗时51t，下行一层耗时61t，并考虑加速、减速事件的时间开销。
+    \item 电梯空闲超过300t且不在1层时返回1层待命。
+    \item 输出所有事件的时间、事件类型、乘客编号、电梯编号、楼层及运行状态。
+    \item 双电梯模式下，根据距离、方向与轿厢负载选择响应电梯。
+    \item 程序结束时释放事件链表和全部队列占用的动态内存。
+\end{enumerate}
+
+\subsection{输入与输出}
+
+测试采用15位固定乘客。每位乘客包含编号、到达时刻、进入楼层、目标楼层和最长等待时间。模拟终止时间设置为6000t，可以覆盖最后一位乘客在4000t到达后的完整处理过程。
+
+\begin{longtable}{ccccc}
+\toprule
+乘客ID & 到达时间/t & 进入楼层 & 目标楼层 & 最长等待/t\\
+\midrule
+\endfirsthead
+\toprule
+乘客ID & 到达时间/t & 进入楼层 & 目标楼层 & 最长等待/t\\
+\midrule
+\endhead
+1&0&1&4&500\\
+2&100&0&3&300\\
+3&150&2&0&500\\
+4&200&3&1&500\\
+5&250&4&0&500\\
+6&300&1&2&100\\
+7&400&0&4&500\\
+8&500&2&3&500\\
+9&1000&1&0&500\\
+10&1500&3&2&500\\
+11&2000&4&1&500\\
+12&2500&0&4&200\\
+13&3000&2&1&500\\
+14&3500&1&3&500\\
+15&4000&3&0&500\\
+\bottomrule
+\end{longtable}
+
+输出以事件日志为主，例如：
+
+\begin{lstlisting}[language={},numbers=none]
+Time=741 Person=8 Left Elevator=1 at floor 3
+Time=5209 Event=E1 Elevator=0 Floor=1 State=Idle
+Simulation finished at Time=5209
+Left=13 GaveUp=2 Total=15
+\end{lstlisting}
+
+\section{概要设计}
+
+\subsection{总体结构}
+
+系统分为链队列模块、事件表模块、乘客状态模块、电梯状态模块、调度模块和主程序模块。主程序只负责初始化测试数据和驱动事件循环；具体逻辑集中在操作函数中。
+
+\begin{center}
+\begin{tabular}{p{3.5cm}p{10cm}}
+\toprule
+模块 & 功能\\
+\midrule
+链队列 & 提供队列初始化、入队、出队、判空、求长度和销毁操作\\
+事件表 & 以时间升序保存未来事件，支持稳定插入、弹出和指定事件删除\\
+乘客 & 处理M1至M6，维护乘客生命周期与楼层等待队列\\
+电梯 & 处理E1至E9，维护门状态、运行方向、楼层和轿厢请求\\
+调度 & 为厅外请求选择电梯，维护请求与电梯之间的分配关系\\
+主程序 & 初始化15位乘客，循环弹出事件，完成分派并统计结果\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{离散事件循环}
+
+主程序按照以下步骤运行：
+
+\begin{enumerate}[label=\arabic*.]
+    \item 初始化模拟器、楼层等待队列、轿厢队列和事件表；
+    \item 将15位乘客的M1事件按到达时刻插入事件表；
+    \item 弹出事件表头结点，并把模拟时钟更新为该事件时刻；
+    \item 根据事件编号把M1至M6交给\texttt{PersonState}，把E1至E9交给\texttt{ElevatorState}；
+    \item 事件处理函数修改系统状态，并把新的未来事件插回事件表；
+    \item 当事件表为空或事件时间超过6000t时结束模拟；
+    \item 统计乘客结果并销毁所有动态结构。
+\end{enumerate}
+
+\subsection{单电梯与双电梯结构比较}
+
+单电梯版本把\texttt{floor}、\texttt{state}、\texttt{CallCar}和\texttt{InElevator}直接放在\texttt{Simulator}中。双电梯版本增加\texttt{Elevator}结构，并由\texttt{Simulator}保存电梯数组：
+
+\begin{lstlisting}
+typedef struct Elevator{
+    int No;
+    int floor;
+    int D1,D2,D3;
+    int state;
+    int CallCar[5];
+    LinkQueue InElevator;
+}Elevator;
+
+typedef struct Simulator{
+    int time;
+    Elevator elevators[ELEVATOR_COUNT];
+    LinkQueue waitingQueue[5];
+    int CallUp[5],CallDown[5];
+    int assignedUp[5],assignedDown[5];
+    EventList events;
+}Simulator;
+\end{lstlisting}
+
+其中，楼层等待队列与厅外按钮由所有电梯共享；轿厢按钮和轿厢乘客队列属于具体电梯。\texttt{assignedUp}和\texttt{assignedDown}记录每个厅外请求被分配给的电梯编号，$-1$表示尚未分配。
+
+\section{详细设计}
+
+\subsection{核心数据结构}
+
+\subsubsection{事件结点}
+
+事件结点保存事件发生时刻、类型、乘客编号、楼层和电梯编号。单电梯版本不需要\texttt{elevatorNo}；双电梯版本使用$-1$表示与具体电梯无关的乘客事件。
+
+事件表采用单链表并按\texttt{time}升序排列。插入时使用小于等于比较，因此同一时刻的事件保持插入先后次序，保证模拟结果可重复。
+
+\subsubsection{乘客状态}
+
+双电梯版本把乘客生命周期划分为以下状态：
+
+\begin{center}
+\begin{tabular}{cl}
+\toprule
+状态 & 含义\\
+\midrule
+NotArrived & 尚未进入系统\\
+Waiting & 已进入楼层等待队列\\
+Assigned & 已安排进入某部电梯，但M5尚未执行\\
+In\_Elevator & 已进入指定电梯\\
+Left & 已到达目标楼层并离开\\
+GaveUp & 等待超时并放弃\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+增加\texttt{Assigned}状态可以处理“已经安排M5但尚未真正进入”的时间间隔，并使过期M4事件能够通过状态判断安全失效。
+
+\subsubsection{队列}
+
+系统复用已有的单链队列实现。五个\texttt{waitingQueue}分别保存各层等待乘客编号，每部电梯的\texttt{InElevator}保存轿厢内乘客编号。队列元素只保存整数编号，详细乘客信息通过\texttt{people[personNo]}访问。
+
+已有\texttt{DeQueue}只能删除队首，而超时乘客可能位于队列中间，因此新增\texttt{personDelete}，通过前驱指针查找并删除指定编号，同时在删除队尾时修正\texttt{rear}指针。
+
+\subsection{事件表操作}
+
+\texttt{InsertEvent}按时间插入事件，时间复杂度为$O(n)$；\texttt{PopEvent}删除表头，复杂度为$O(1)$；\texttt{DeleteEvent}按事件类型和电梯编号删除过期事件，复杂度为$O(n)$。多电梯版本的事件判定必须同时比较\texttt{type}和\texttt{elevatorNo}，否则取消0号电梯的E7时会误删1号电梯的E7。
+
+\subsection{乘客事件设计}
+
+\begin{longtable}{cp{11cm}}
+\toprule
+事件 & 处理内容\\
+\midrule
+M1 & 乘客进入模拟系统，初始化其状态并立即安排M2\\
+M2 & 乘客按下楼层按钮，随后进入排队处理M3\\
+M3 & 加入所在层等待队列，设置上行或下行按钮，分配响应电梯，并安排超时事件M4\\
+M4 & 若乘客仍为Waiting或Assigned，则从等待队列删除并标记GaveUp；若已进入电梯则忽略该过期事件\\
+M5 & 从楼层队列删除乘客，加入指定电梯的轿厢队列，设置目标层CallCar\\
+M6 & 从指定电梯删除乘客，刷新轿厢按钮并标记Left\\
+\bottomrule
+\end{longtable}
+
+放弃事件的发生时刻为
+\[
+T_{M4}=T_{arrival}+T_{giveup}.
+\]
+M5和M6执行后通过\texttt{personEventTrue}判断当前电梯是否还有人员进出事件；如果没有，则令$D1=0,D3=1$，表示门仍开着但已无人进出。
+
+\subsection{电梯事件设计}
+
+\begin{longtable}{cp{11cm}}
+\toprule
+事件 & 处理内容\\
+\midrule
+E1 & 空闲等待；超过300t且不在1层时生成返回1层的轿厢请求\\
+E2 & 到达一层后的减速判断；有本层请求则安排E3，否则重新调用控制器\\
+E3 & 开门并设置门状态，安排E4、E5和300t后的E9\\
+E4 & 按进入电梯的逆序安排离开事件，再按队列顺序安排进入事件\\
+E5 & 每40t检查一次D1；无人进出时关门并在20t后安排E6\\
+E6 & 取消过期移动事件，刷新按钮，计算目标楼层并决定上行、下行或空闲\\
+E7 & 上升一层，在有请求时安排减速E2，否则继续上行\\
+E8 & 下降一层，在有请求时安排减速E2，否则继续下行\\
+E9 & 清除长时间停留标志并重新调用控制器\\
+\bottomrule
+\end{longtable}
+
+\subsection{双电梯调度算法}
+
+当某层出现新的方向请求时，\texttt{AssignCall}调用\texttt{DispatchElevator}。后者分别计算两部电梯的调度代价：
+
+\[
+C=10d+p+q,
+\]
+
+其中$d$为电梯与请求楼层的距离，$q$为轿厢内人数。当电梯运行方向与乘客方向不一致，或请求不在电梯当前运行前方时，附加惩罚$p=50$；空闲或顺路时$p=0$。系统选择代价最小的电梯，代价相同时选择编号较小者。
+
+分配结果写入\texttt{assignedUp[floor]}或\texttt{assignedDown[floor]}。电梯只响应分配给自己的厅外请求，但始终响应自己的\texttt{CallCar}。当对应方向已经无人等待时，\texttt{CancelAssignment}把分配值恢复为$-1$。
+
+\subsection{复杂度分析}
+
+设事件表当前长度为$n$，某队列长度为$m$。事件插入、指定事件删除和指定乘客删除分别为$O(n)$、$O(n)$和$O(m)$；事件弹出和普通入队为$O(1)$。楼层数和电梯数在本实验中分别固定为5和2，因此目标楼层搜索与电梯选择可以视为常数时间。整个模拟的主要开销来自事件表的有序插入。
+
+\section{调试分析}
+
+\subsection{编译阶段问题}
+
+开发过程中首先处理了头文件和类型问题。原实现同时包含队列的\texttt{common.h}与\texttt{operations.h}，而后者又包含前者，导致无头文件保护时可能重复定义。最终改为仅通过相对路径包含队列操作头文件，并为电梯头文件添加宏保护。
+
+
+\subsection{运行阶段问题}
+
+\begin{enumerate}[label=\arabic*.]
+    \item \textbf{模拟时间倒退。}主循环弹出事件后没有立即更新\texttt{simulator.time}，导致控制器使用旧时间插入新事件。修正为每次分派前执行\texttt{simulator.time=time}，随后检查完整日志，时间倒退次数为0。
+    \item \textbf{E6无法启动移动。}上行和下行分支曾错误嵌套在\texttt{goal==-1}内部，使有效目标无法进入移动分支。将条件重构为互斥的\texttt{if--else if--else}结构。
+    \item \textbf{下行事件写成上行事件。}E8继续下降时误插入E7，导致方向突变。修正为继续插入E8。
+    \item \textbf{遗漏一名离开乘客。}倒序循环条件曾写为\texttt{i>0}，遗漏数组下标0；修改为\texttt{i>=0}。
+    \item \textbf{门无法关闭。}最后一个M5或M6完成后没有清除D1。增加人员事件检查，并在无人继续进出时设置$D1=0,D3=1$。
+    \item \textbf{旧事件重复驱动。}空闲事件和移动事件未随状态改变取消，产生重复E1/E7/E8。通过\texttt{eventTrue}去重，并由\texttt{DeleteEvent}按电梯编号取消过期事件。
+    \item \textbf{双电梯重复响应。}若只保存CallUp与CallDown，两部电梯会同时认为请求属于自己。增加\texttt{assignedUp}和\texttt{assignedDown}，保证一个方向请求只分配给一部电梯。
+\end{enumerate}
+
+\section{测试结果}
+
+\subsection{测试结果汇总}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+指标 & 单电梯 & 双电梯\\
+\midrule
+测试乘客数 & 15 & 15\\
+成功到达人数 & 10 & 13\\
+超时放弃人数 & 5 & 2\\
+全部乘客得到最终处理 & 是 & 是\\
+事件时间倒退次数 & 0 & 0\\
+最后处理时刻/t & 5320 & 5209\\
+结束时电梯状态 & 1层、Idle & 两部均为1层、Idle\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{运行结果示例}
+
+图\ref{fig:single}和图\ref{fig:double}分别给出了单电梯和双电梯程序在15位乘客测试输入下的实际运行日志（截取自程序控制台输出）。单电梯日志显示模拟在Time=5320结束，电梯最终回到1层并处于Idle状态；双电梯日志显示模拟在Time=5209结束，两部电梯均回到1层并处于Idle状态，统计结果为Left=13、GaveUp=2、Total=15，与上表汇总数据一致。
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.85\textwidth]{single.png}
+\caption{单电梯运行结果示例}
+\label{fig:single}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.85\textwidth]{double.png}
+\caption{双电梯运行结果示例}
+\label{fig:double}
+\end{figure}
+
+双电梯运行中，0号电梯搭载8人，1号电梯搭载5人，说明调度器实际使用了两部电梯，而不是把全部请求固定分配给同一部电梯。与单电梯相比，双电梯使成功到达人数由10人增加到13人，放弃人数由5人下降到2人。对本组固定输入而言，增加电梯数量及基于方向、距离的调度降低了乘客等待超时的概率。
+
+
+\section{总结}
+
+本项目使用有序事件链表表达时间推进，使用链队列表达乘客等待与轿厢乘客集合，实现了乘客与电梯两个相互作用的状态机。双电梯把电梯状态设计成\texttt{Elevator}数组，同时保留共享楼层资源，并通过请求分配数组解决重复响应问题。
+
+
+\appendix
+\section{项目文件结构}
+
+\begin{lstlisting}[language={},numbers=none]
+queue/Elevator/
+|-- include/
+|   |-- common.h
+|   |-- operations.h
+|   |-- multi_common.h
+|   `-- multi_operations.h
+|-- src/
+|   |-- operations.c
+|   `-- multi_operations.c
+|-- main.c
+|-- multi_main.c
+`-- Elevator_Report.tex
+
+queue/single_linked_queue/
+|-- include/common.h
+|-- include/operations.h
+`-- src/operations.c
+\end{lstlisting}
+
+\section{双电梯公共数据结构}
+\lstinputlisting[caption={multi\_common.h}]{include/multi_common.h}
+
+\section{双电梯函数声明}
+\lstinputlisting[caption={multi\_operations.h}]{include/multi_operations.h}
+
+\section{双电梯主程序}
+\lstinputlisting[caption={multi\_main.c}]{multi_main.c}
+
+\section{双电梯操作实现}
+\lstinputlisting[caption={multi\_operations.c}]{src/multi_operations.c}
+
+\section{复用的链队列接口}
+\lstinputlisting[caption={single\_linked\_queue/include/operations.h}]{../single_linked_queue/include/operations.h}
+
+\end{document}
