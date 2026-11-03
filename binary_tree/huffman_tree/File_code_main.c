@@ -1,70 +1,113 @@
 #include "File_code/include/add_operations.h"
+#ifdef _WIN32
+#include<windows.h>
+#endif
 
 int main(){
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+#endif
     const char *source[]={
         "testcase (1)/testcase/2.hamlet.txt",
         "testcase (1)/testcase/1.MIT-license.txt",
-        "testcase (1)/testcase/3.USTC-logo.bmp"
+        "testcase (1)/testcase/3.USTC-logo.bmp",
+        "testcase (1)/testcase/4.USTC-logo.png",
+        "testcase (1)/testcase/5.data-structure.pdf",
+        "testcase (1)/testcase/6.MV.mp4"
     };
-    const char *target[]={"hamlet.hfm","license.hfm","logo.hfm"};
-    const char *restored[]={"hamlet_restored.txt","license_restored.txt","logo_restored.bmp"};
+    const char *compressed[]={"hamlet.hfm","license.hfm","logo.hfm",
+                              "logo_png.hfm","data_structure.hfm","MV.hfm"};
+    const char *restored[]={"hamlet_restored.txt","license_restored.txt","logo_restored.bmp",
+                            "logo_restored.png","data_structure_restored.pdf","MV_restored.mp4"};
+    char line[1024];
+    char input[1024];
+    char output[1024];
+    int command;
+    int choice;
 
-    for(int i=0;i<3;i++){
-        printf("\nSource: %s\n",source[i]);
-        if(!CompressFile(source[i],target[i])||
-           !DecompressFile(target[i],restored[i])){
-            printf("failed\n");
-            return 1;
+    while(true){
+        printf("\n1. 压缩文件\n2. 解压文件\n0. 退出\n请选择操作：");
+        if(!fgets(line,sizeof(line),stdin)){
+            break;
         }
-
-        FILE *in=fopen(source[i],"rb");
-        FILE *out=fopen(restored[i],"rb");
-        FILE *fp=fopen(target[i],"rb");
-        if(!in||!out||!fp){
-            if(in) fclose(in);
-            if(out) fclose(out);
-            if(fp) fclose(fp);
-            return 1;
+        if(sscanf(line,"%d",&command)!=1){
+            continue;
         }
-        bool success=true;
-        int ch;
-        int decoded;
-        uint64_t size=0;
-        uint64_t compressedSize=0;
-        do{
-            ch=fgetc(in);
-            decoded=fgetc(out);
-            if(ch!=decoded){
-                success=false;
+        if(command==0){
+            break;
+        }
+        if(command!=1&&command!=2){
+            continue;
+        }
+        printf("\n1. 哈姆雷特\n2. MIT许可证\n3. BMP图片\n4. PNG图片\n");
+        printf("5. PDF文档\n6. 视频\n7. 自定义路径\n0. 返回\n请选择文件：");
+        if(!fgets(line,sizeof(line),stdin)){
+            break;
+        }
+        if(sscanf(line,"%d",&choice)!=1||choice<0||choice>7){
+            continue;
+        }
+        if(choice==0){
+            continue;
+        }
+        if(choice==7){
+            printf("请输入源文件路径（不加引号）：");
+            if(!fgets(input,sizeof(input),stdin)){
                 break;
             }
-            if(ch!=EOF){
-                size++;
+            input[strcspn(input,"\r\n")]='\0';
+        }else{
+            strcpy(input,command==1?source[choice-1]:compressed[choice-1]);
+        }
+        printf("源文件：%s\n",input);
+        if(choice!=7){
+            printf("请输入输出路径（直接回车使用 %s）：",
+                   command==1?compressed[choice-1]:restored[choice-1]);
+        }else{
+            printf("请输入输出文件路径（不加引号）：");
+        }
+        if(!fgets(output,sizeof(output),stdin)){
+            break;
+        }
+        output[strcspn(output,"\r\n")]='\0';
+        if(output[0]=='\0'){
+            if(choice==7){
+                continue;
             }
-        }while(ch!=EOF);
-        if(ferror(in)||ferror(out)){
-            success=false;
+            strcpy(output,command==1?compressed[choice-1]:restored[choice-1]);
         }
-        while(fgetc(fp)!=EOF){
-            compressedSize++;
-        }
-        if(ferror(fp)){
-            success=false;
-        }
-        fclose(in);
-        fclose(out);
-        fclose(fp);
 
+        bool success=command==1?CompressFile(input,output):DecompressFile(input,output);
         if(!success){
-            printf("Restored file differs from source.\n");
-            return 1;
+            printf("操作失败，请检查文件路径和输入文件。\n");
+            continue;
         }
-        printf("Original: %llu bytes\n",(unsigned long long)size);
-        printf("Compressed: %llu bytes\n",(unsigned long long)compressedSize);
-        if(size!=0){
-            printf("Compressed/original: %.2f%%\n",100.0*(double)compressedSize/(double)size);
+        printf("输出文件：%s\n",output);
+
+        const char *paths[]={input,output};
+        uint64_t size[2]={0,0};
+        bool counted=true;
+        for(int i=0;i<2;i++){
+            FILE *fp=fopen(paths[i],"rb");
+            if(!fp){
+                counted=false;
+                break;
+            }
+            while(fgetc(fp)!=EOF){
+                size[i]++;
+            }
+            if(ferror(fp)){
+                counted=false;
+            }
+            fclose(fp);
         }
-        printf("Restored file matches source.\n");
+        if(counted){
+            printf("源文件大小：%llu 字节，输出文件大小：%llu 字节\n",
+                   (unsigned long long)size[0],(unsigned long long)size[1]);
+            if(command==1&&size[0]!=0){
+                printf("占比：%.2f%%\n",100.0*(double)size[1]/(double)size[0]);
+            }
+        }
     }
     return 0;
 }

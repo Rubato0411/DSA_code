@@ -1,186 +1,203 @@
 #include "../include/operations.h"
 
-void CreateGraph(ALGraph *G);
-void InitGraph(ALGraph *G){
-    G->vexnum=0;
-    G->arcnum=0;
-    int i=0;
-    for(i=0;i<MAX_VERTEX_NUM;i++){
-        G->vertices[i].firstarc=NULL;
+/* 本文件按无向图处理：每条边在邻接表中保存两个方向的弧结点。 */
+
+/* 从顶点 v 的边链表中删除一条指向 w 的弧 */
+static bool RemoveArc(ALGraph *G, int v, int w) {
+    ArcNode **pp = &G->vertices[v].firstarc;
+    while (*pp != NULL) {
+        if ((*pp)->adjvex == w) {
+            ArcNode *temp = *pp;
+            *pp = temp->nextarc;
+            free(temp);
+            return true;
+        }
+        pp = &(*pp)->nextarc;
+    }
+    return false;
+}
+
+/* 无向图边数 = 所有顶点度数之和 / 2 */
+static void RecountArcs(ALGraph *G) {
+    int degreeSum = 0;
+    for (int i = 0; i < G->vexnum; i++) {
+        for (ArcNode *p = G->vertices[i].firstarc; p != NULL; p = p->nextarc) {
+            degreeSum++;
+        }
+    }
+    G->arcnum = degreeSum / 2;
+}
+
+void InitGraph(ALGraph *G) {
+    if (G == NULL) {
+        return;
+    }
+    G->vexnum = 0;
+    G->arcnum = 0;
+    for (int i = 0; i < MAX_VERTEX_NUM; i++) {
+        G->vertices[i].data = 0;
+        G->vertices[i].firstarc = NULL;
     }
 }
-bool DestroyGraph(ALGraph *G){
-    if(!G){
+
+bool DestroyGraph(ALGraph *G) {
+    if (G == NULL) {
         return false;
     }
-    int i=0;
-    for(i=0;i<G->vexnum;i++){
-        ArcNode *p=G->vertices[i].firstarc;
-        while(p!=NULL){
-            ArcNode *temp=p;
-            p=p->nextarc;
+    for (int i = 0; i < G->vexnum; i++) {
+        ArcNode *p = G->vertices[i].firstarc;
+        while (p != NULL) {
+            ArcNode *temp = p;
+            p = p->nextarc;
             free(temp);
         }
-        G->vertices[i].firstarc=NULL;
+        G->vertices[i].firstarc = NULL;
     }
-    G->vexnum=0;
-    G->arcnum=0;
+    G->vexnum = 0;
+    G->arcnum = 0;
     return true;
 }
-bool GetVex(ALGraph G,int v,VertexType *value){
-    if(v<0||v>=G.vexnum){
+
+bool GetVex(ALGraph G, int v, VertexType *value) {
+    if (value == NULL || v < 0 || v >= G.vexnum) {
         return false;
     }
-    *value=G.vertices[v].data;
+    *value = G.vertices[v].data;
     return true;
 }
-bool PutVex(ALGraph *G,int v,VertexType value){
-    if(v<0||v>=G->vexnum){
+
+bool PutVex(ALGraph *G, int v, VertexType value) {
+    if (G == NULL || v < 0 || v >= G->vexnum) {
         return false;
     }
-    G->vertices[v].data=value;
+    G->vertices[v].data = value;
     return true;
 }
-VertexType FirstAdjVex(ALGraph G,int v){
-    if(v<0||v>=G.vexnum){
+
+VertexType FirstAdjVex(ALGraph G, int v) {
+    if (v < 0 || v >= G.vexnum) {
         return -1;
     }
-    ArcNode *p=G.vertices[v].firstarc;
-    if(p!=NULL){
-        return p->adjvex;
-    }else{
-        return -1;
-    }
+    ArcNode *p = G.vertices[v].firstarc;
+    return (p != NULL) ? p->adjvex : -1;
 }
-VertexType NextAdjVex(ALGraph G,int v,int w){
-    if(v<0||v>=G.vexnum||w<0||w>=G.vexnum){
+
+VertexType NextAdjVex(ALGraph G, int v, int w) {
+    if (v < 0 || v >= G.vexnum || w < 0 || w >= G.vexnum) {
         return -1;
     }
-    ArcNode *p=G.vertices[v].firstarc;
-    while(p!=NULL){
-        if(p->adjvex==w){
-            if(p->nextarc!=NULL){
-                return p->nextarc->adjvex;
-            }else{
-                return -1;
-            }
+    ArcNode *p = G.vertices[v].firstarc;
+    while (p != NULL) {
+        if (p->adjvex == w) {
+            return (p->nextarc != NULL) ? p->nextarc->adjvex : -1;
         }
-        p=p->nextarc;
+        p = p->nextarc;
     }
     return -1;
 }
-bool InsertVex(ALGraph *G,VertexType v){
-    if(G->vexnum>=MAX_VERTEX_NUM){
+
+bool InsertVex(ALGraph *G, VertexType v) {
+    if (G == NULL || G->vexnum >= MAX_VERTEX_NUM) {
         return false;
     }
-    G->vertices[G->vexnum].data=v;
-    G->vertices[G->vexnum].firstarc=NULL;
+    G->vertices[G->vexnum].data = v;
+    G->vertices[G->vexnum].firstarc = NULL;
     G->vexnum++;
     return true;
 }
-bool DeleteVex(ALGraph *G,int v){
-    if(v<0||v>=G->vexnum){
+
+bool DeleteVex(ALGraph *G, int v) {
+    if (G == NULL || v < 0 || v >= G->vexnum) {
         return false;
     }
-    ArcNode *p=G->vertices[v].firstarc;
-    while(p!=NULL){
-        ArcNode *temp=p;
-        p=p->nextarc;
-        free(temp);
-    }
-    int i=0;
-    for(i=0;i<G->vexnum-1;i++){
-        if(i==v){
+
+    /* 1. 删除其他顶点中指向 v 的弧，并修正大于 v 的顶点下标 */
+    for (int i = 0; i < G->vexnum; i++) {
+        if (i == v) {
             continue;
         }
-        ArcNode *pre=NULL;
-        ArcNode *cur=G->vertices[i].firstarc;
-        while(cur!=NULL){
-            if(cur->adjvex==v){
-                ArcNode *temp=cur;
-                if(pre==NULL){
-                    G->vertices[i].firstarc=cur->nextarc;
-                }else{
-                    pre->nextarc=cur->nextarc;
-                }
-                cur=cur->nextarc;
-                free(temp);
-                G->arcnum--;
-            }else{
-                if(cur->adjvex>v){
+
+        ArcNode **pp = &G->vertices[i].firstarc;
+        while (*pp != NULL) {
+            ArcNode *cur = *pp;
+            if (cur->adjvex == v) {
+                *pp = cur->nextarc;
+                free(cur);
+            } else {
+                if (cur->adjvex > v) {
                     cur->adjvex--;
                 }
-                pre=cur;
-                cur=cur->nextarc;
+                pp = &cur->nextarc;
             }
         }
     }
-    // 3. 如果删除的不是最后一个顶点，把最后一个顶点移到 v 的位置
-    if(v!=G->vexnum-1){
-        G->vertices[v]=G->vertices[G->vexnum-1];
-        G->vertices[v].firstarc=G->vertices[G->vexnum-1].firstarc;
-        ArcNode *p=G->vertices[v].firstarc;
-        while(p!=NULL){
-            if(p->adjvex==G->vexnum-1){
-                p->adjvex=v;
-            }
-            p=p->nextarc;
-        }
+
+    /* 2. 释放被删顶点自己的边链表 */
+    ArcNode *p = G->vertices[v].firstarc;
+    while (p != NULL) {
+        ArcNode *temp = p;
+        p = p->nextarc;
+        free(temp);
     }
-}
-bool InsertArc(ALGraph *G,int v,int w){
-    if(v<0||v>=G->vexnum||w<0||w>=G->vexnum){
-        return false;
+    G->vertices[v].firstarc = NULL;
+
+    /* 3. 顶点表前移，保持顶点顺序 */
+    for (int i = v; i < G->vexnum - 1; i++) {
+        G->vertices[i] = G->vertices[i + 1];
     }
-    ArcNode *p=G->vertices[v].firstarc;
-    while(p!=NULL){
-        if(p->adjvex==w){
-            return false;
-        }
-        p=p->nextarc;
-    }
-    ArcNode *newArc=(ArcNode*)malloc(sizeof(ArcNode));
-    if(!newArc){
-        return false;
-    }
-    newArc->adjvex=w;
-    newArc->nextarc=G->vertices[v].firstarc;
-    G->vertices[v].firstarc=newArc;
-    G->arcnum++;
-    ArcNode *newArc2=(ArcNode*)malloc(sizeof(ArcNode));
-    if(!newArc2){
-        return false;
-    }
-    newArc2->adjvex=v;
-    newArc2->nextarc=G->vertices[w].firstarc;
-    G->vertices[w].firstarc=newArc2;
+    G->vertices[G->vexnum - 1].firstarc = NULL;
+    G->vexnum--;
+
+    /* 4. 重新统计边数 */
+    RecountArcs(G);
     return true;
 }
-bool DeleteArc(ALGraph *G,int v,int w){
-    if(v<0||v>=G->vexnum||w<0||w>=G->vexnum){
+
+bool InsertArc(ALGraph *G, int v, int w) {
+    if (G == NULL || v < 0 || v >= G->vexnum || w < 0 || w >= G->vexnum) {
         return false;
     }
-    ArcNode *pre=NULL;
-    ArcNode *cur=G->vertices[v].firstarc;
-    while(cur&&cur->adjvex!=w){
-        pre=cur;
-        cur=cur->nextarc;
+
+    /* 判重：无向图中若 v 的链表中已有 w，则边已存在 */
+    for (ArcNode *p = G->vertices[v].firstarc; p != NULL; p = p->nextarc) {
+        if (p->adjvex == w) {
+            return false;
+        }
     }
-    if(!cur){
+
+    /* 先分配两个结点，避免只插入一个方向 */
+    ArcNode *toW = (ArcNode *)malloc(sizeof(ArcNode));
+    ArcNode *toV = (ArcNode *)malloc(sizeof(ArcNode));
+    if (toW == NULL || toV == NULL) {
+        free(toW);
+        free(toV);
         return false;
     }
-    if(pre){
-        pre->nextarc=cur->nextarc;
-    }else{
-        G->vertices[v].firstarc=cur->nextarc;
+
+    toW->adjvex = w;
+    toW->nextarc = G->vertices[v].firstarc;
+    G->vertices[v].firstarc = toW;
+
+    toV->adjvex = v;
+    toV->nextarc = G->vertices[w].firstarc;
+    G->vertices[w].firstarc = toV;
+
+    G->arcnum++;
+    return true;
+}
+
+bool DeleteArc(ALGraph *G, int v, int w) {
+    if (G == NULL || v < 0 || v >= G->vexnum || w < 0 || w >= G->vexnum) {
+        return false;
     }
-    free(cur);
-    pre=NULL;
-    cur=G->vertices[w].firstarc;
-    while(cur&&cur->adjvex!=v){
-        pre=cur;
-        cur=cur->nextarc;
+
+    if (!RemoveArc(G, v, w)) {
+        return false;
     }
+
+    /* 无向图还要删除对称弧；v == w 时清掉第二个自环结点 */
+    RemoveArc(G, w, v);
+
     G->arcnum--;
     return true;
 }
